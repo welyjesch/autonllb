@@ -13,11 +13,48 @@ import json
 import re
 import sys
 import time
+import asyncio
 from pathlib import Path
 from typing import List, Dict, Any
 
-from datasets import load_dataset
+import requests
+import googletrans
 from googletrans import Translator
+
+
+# ==============================================================================
+# SECTION 0: Dataset Loading
+# ==============================================================================
+
+def load_dataset_manually() -> List[str]:
+    """Manually download and load the dataset to avoid httpx compatibility issues."""
+    # Download the parquet file using the direct download link
+    url = "https://huggingface.co/datasets/welyjesch/hiligaynon_news_articles/resolve/refs%2Fconvert%2Fparquet/default/train/0000.parquet"
+    
+    # Download the file
+    import requests
+    response = requests.get(url)
+    
+    if response.status_code != 200:
+        raise Exception(f"Failed to download dataset: {response.status_code}")
+    
+    # Save the file temporarily
+    temp_file = "temp_dataset.parquet"
+    with open(temp_file, "wb") as f:
+        f.write(response.content)
+    
+    # Load the dataset using pandas
+    import pandas as pd
+    df = pd.read_parquet(temp_file)
+    
+    # Extract the articles
+    articles = df["text"].tolist()
+    
+    # Clean up
+    import os
+    os.remove(temp_file)
+    
+    return articles
 
 
 # ==============================================================================
@@ -118,7 +155,7 @@ def split_into_sentences(text: str) -> List[str]:
     return sentences
 
 
-def translate_sentence(
+async def translate_sentence(
     translator: Translator,
     sentence: str,
     delay: float = 2.5,
@@ -127,8 +164,8 @@ def translate_sentence(
     """Translate a single sentence from Hiligaynon to English with retry logic."""
     for attempt in range(retries):
         try:
-            time.sleep(delay)
-            result = translator.translate(sentence, src_lang='hil', dest_lang='en')
+            await asyncio.sleep(delay)
+            result = await translator.translate(sentence, src='hil', dest='en')
             
             if hasattr(result, 'text') and result.text:
                 return result.text
@@ -139,16 +176,18 @@ def translate_sentence(
         except Exception as e:
             print(f"  Translation error (attempt {attempt + 1}/{retries}): {str(e)}")
             if attempt < retries - 1:
-                time.sleep(delay * (attempt + 1))
+                await asyncio.sleep(delay * (attempt + 1))
     
     return sentence
+
+
 
 
 # ==============================================================================
 # SECTION 2: Data Preparation
 # ==============================================================================
 
-def prepare_training_data(
+async def prepare_training_data(
     output_file: Path,
     max_articles: int = None,
     translation_delay: float = 2.5,
@@ -164,8 +203,8 @@ def prepare_training_data(
     print("=" * 70)
     
     print("Loading welyjesch/hiligaynon_news_articles dataset...")
-    dataset = load_dataset("welyjesch/hiligaynon_news_articles")
-    articles = dataset["train"]["articles"]
+    # Manually download the dataset files to avoid httpx compatibility issues
+    articles = load_dataset_manually()
     
     if max_articles:
         articles = articles[:max_articles]
@@ -198,7 +237,7 @@ def prepare_training_data(
                 seq_id = int(time.time() * 1000) + sent_idx
                 
                 # Translate
-                english = translate_sentence(translator, sentence, delay=translation_delay)
+                english = await translate_sentence(translator, sentence, delay=translation_delay)
                 
                 # Write to JSONL
                 pair = {
@@ -272,11 +311,11 @@ Examples:
     print("=" * 70)
     
     try:
-        total_pairs = prepare_training_data(
+        total_pairs = asyncio.run(prepare_training_data(
             output_file=args.output,
             max_articles=args.max_articles,
             translation_delay=args.delay,
-        )
+        ))
         
         print("\n" + "=" * 70)
         print(f"✓ Data preparation successful!")
