@@ -98,28 +98,41 @@ ENGLISH_PATTERNS = [
 ]
 
 
-def is_english_sentence(sentence: str, threshold: float = 0.5) -> bool:
+def is_english_sentence(sentence: str, threshold: float = 1.0) -> bool:
     """
-    Detect if a sentence is likely FULLY in English.
+    Only skip sentences that are almost entirely in English.
     
-    Only marks as English if >= 50% of the words match English patterns.
-    This allows sentences with 1-2 English loanwords to pass through.
+    Returns True (skip) only if 100% or nearly all words are English.
+    Allows sentences with a few English loanwords to pass through.
     """
     if not sentence or not sentence.strip():
         return False
     
     text_lower = sentence.lower()
-    english_word_count = 0
+    
+    # Use a set to count UNIQUE English words found in the sentence
+    # to avoid double-counting the same word multiple times
+    found_english_words = set()
     
     for pattern in ENGLISH_PATTERNS:
         matches = re.findall(pattern, text_lower, re.IGNORECASE)
-        english_word_count += len(matches)
+        for match in matches:
+            # Since patterns are groups, match might be a tuple
+            word = match[0] if isinstance(match, tuple) else match
+            found_english_words.add(word.lower())
+    
+    english_word_count = len(found_english_words)
     
     words = sentence.split()
     if len(words) == 0:
         return False
     
-    english_ratio = english_word_count / len(words)
+    # Use a set of unique words in the sentence for the ratio
+    # This prevents a sentence like "the the the" from being 100% English
+    # while "the dog" is 50% English.
+    unique_words_count = len(set(w.lower() for w in words))
+    
+    english_ratio = english_word_count / unique_words_count if unique_words_count > 0 else 0
     return english_ratio >= threshold
 
 
