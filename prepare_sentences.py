@@ -98,8 +98,13 @@ ENGLISH_PATTERNS = [
 ]
 
 
-def is_english_sentence(sentence: str, threshold: float = 0.3) -> bool:
-    """Detect if a sentence is likely in English."""
+def is_english_sentence(sentence: str, threshold: float = 0.5) -> bool:
+    """
+    Detect if a sentence is likely FULLY in English.
+    
+    Only marks as English if >= 50% of the words match English patterns.
+    This allows sentences with 1-2 English loanwords to pass through.
+    """
     if not sentence or not sentence.strip():
         return False
     
