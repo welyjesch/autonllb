@@ -88,53 +88,14 @@ ABBREVIATIONS = [
 
 ABBREVIATION_PATTERN = '(' + '|'.join(ABBREVIATIONS) + r')'
 
-ENGLISH_PATTERNS = [
-    r'\b(the|and|that|with|for|this|from|have|not)\b',
-    r'\b(was|were|are|is|been|being|be)\b',
-    r'\b(will|would|could|should|may|might|must|can)\b',
-    r'\b(he|she|it|they|we|you|i)\b',
-    r'\b(his|her|their|our|your|my|its)\b',
-    r'\b(in|on|at|to|for|by|with|from|into|through|during)\b',
-]
-
-
-def is_english_sentence(sentence: str, threshold: float = 1.0) -> bool:
-    """
-    Only skip sentences that are almost entirely in English.
-    
-    Returns True (skip) only if 100% or nearly all words are English.
-    Allows sentences with a few English loanwords to pass through.
-    """
+def is_english_sentence(sentence: str) -> bool:
+    """Detect if a sentence is likely in English using langdetect."""
     if not sentence or not sentence.strip():
         return False
-    
-    text_lower = sentence.lower()
-    
-    # Use a set to count UNIQUE English words found in the sentence
-    # to avoid double-counting the same word multiple times
-    found_english_words = set()
-    
-    for pattern in ENGLISH_PATTERNS:
-        matches = re.findall(pattern, text_lower, re.IGNORECASE)
-        for match in matches:
-            # Since patterns are groups, match might be a tuple
-            word = match[0] if isinstance(match, tuple) else match
-            found_english_words.add(word.lower())
-    
-    english_word_count = len(found_english_words)
-    
-    words = sentence.split()
-    if len(words) == 0:
+    try:
+        return detect(sentence) == 'en'
+    except Exception:
         return False
-    
-    # Use a set of unique words in the sentence for the ratio
-    # This prevents a sentence like "the the the" from being 100% English
-    # while "the dog" is 50% English.
-    unique_words_count = len(set(w.lower() for w in words))
-    
-    english_ratio = english_word_count / unique_words_count if unique_words_count > 0 else 0
-    return english_ratio >= threshold
-
 
 def split_into_sentences(text: str) -> List[str]:
     """Split text into sentences using regex pattern."""
