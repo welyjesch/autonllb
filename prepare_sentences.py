@@ -21,79 +21,32 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any
 
-import requests
+from langdetect import detect, detect_langs, DetectorFactory
 
-
-# ==============================================================================
-# SECTION 0: Dataset Loading
-# ==============================================================================
-
-def load_dataset_manually() -> List[str]:
-    """Manually download and load the dataset to avoid httpx compatibility issues."""
-    # Download the parquet file using the direct download link
-    url = "https://huggingface.co/datasets/welyjesch/hiligaynon_news_articles/resolve/refs%2Fconvert%2Fparquet/default/train/0000.parquet"
-    
-    # Download the file
-    import requests
-    response = requests.get(url)
-    
-    if response.status_code != 200:
-        raise Exception(f"Failed to download dataset: {response.status_code}")
-    
-    # Save the file temporarily
-    temp_file = "temp_dataset.parquet"
-    with open(temp_file, "wb") as f:
-        f.write(response.content)
-    
-    # Load the dataset using pandas
-    import pandas as pd
-    df = pd.read_parquet(temp_file)
-    
-    # Extract the articles
-    articles = df["text"].tolist()
-    
-    # Clean up
-    import os
-    os.remove(temp_file)
-    
-    return articles
-
-
-# ==============================================================================
-# SECTION 1: Sentence Extraction and Splitting
-# ==============================================================================
-
-ABBREVIATIONS = [
-    # Version numbers - MORE SPECIFIC patterns first!
-    r'\b\d+\.\d+\.\d+\b',  # 3-part version (2.5.1) BEFORE 2-part (2.5)
-    r'\b\d+\.\d+\b',       # 2-part version (2.5)
-    r'\.\.\.+',
-    r'\b\d+\.',
-    r'\b[A-Z]\.',
-    r'\bDr\.', r'\bMr\.', r'\bMrs\.', r'\bMs\.', r'\bProf\.', 
-    r'\bSr\.', r'\bJr\.', r'\bSt\.', r'\bFr\.', r'\bRev\.',
-    r'\bGov\.', r'\bSen\.', r'\bRep\.', r'\bPres\.', r'\bGen\.', 
-    r'\bCol\.', r'\bLt\.', r'\bSgt\.', r'\bCpl\.', r'\bCapt\.', 
-    r'\bCmdr\.', r'\bAdm\.', r'\bAmb\.', r'\bHon\.',
-    r'\bPhD\.', r'\bMD\.', r'\bBA\.', r'\bBS\.', r'\bMA\.', r'\bMS\.',
-    r'\bInc\.', r'\bLtd\.', r'\bCo\.', r'\bCorp\.', r'\bLLC\.',
-    r'\bvs\.', r'\betc\.', r'\bi\.e\.', r'\be\.g\.',
-    r'\bFig\.', r'\bfig\.', r'\bVol\.', r'\bvol\.', 
-    r'\bNo\.', r'\bno\.', r'\bpp\.', r'\bpg\.', r'\bp\.',
-    r'\bed\.', r'\beds\.', r'\best\.', r'\bapprox\.', 
-    r'\bca\.', r'\bcf\.', r'\bviz\.', r'\bal\.', r'\bet al\.',
-    # NOTE: Don't add comma-prefixed patterns like r',\s*etc\.' - they break sentence splitting!
-    # The \betc\. pattern already matches "etc." after commas via word boundary
-]
-
-ABBREVIATION_PATTERN = '(' + '|'.join(ABBREVIATIONS) + r')'
+# Ensure consistent results from langdetect
+DetectorFactory.seed = 0
 
 def is_english_sentence(sentence: str) -> bool:
-    """Detect if a sentence is likely in English using langdetect."""
+    """
+    Detect if a sentence is likely FULLY in English.
+    Mixed sentences should return False.
+    """
     if not sentence or not sentence.strip():
         return False
+    
+    # Heuristic: If it contains common Hiligaynon markers or words, it's mixed/Hiligaynon
+    # regardless of what langdetect says.
+    hiligaynon_markers = {'gid', 'man', 'daw', 'sang', 'para', 'maayong', 'aga', 'sa', 'inyo', 'tanan', 'diin', 'ka', 'makadto', 'subong'}
+    words = sentence.lower().split()
+    if any(word.strip('.,!?;:') in hiligaynon_markers for word in words):
+        return False
+
     try:
-        return detect(sentence) == 'en'
+        langs = detect_langs(sentence)
+        if langs and langs[0].lang == 'en':
+            # Use a high threshold for pure English
+            return langs[0].prob > 0.98
+        return False
     except Exception:
         return False
 
@@ -180,7 +133,7 @@ class ChunkManager:
         Returns:
             Path to saved chunk file
         """
-        chunk_file = self.chunks_dir / f"translated_data_chunk_{chunk_number}.txt"
+        chunk_file = self.chunks_dir / f"hiligaynon_chunk_{chunk_number}.txt"
         
         with open(chunk_file, 'w', encoding='utf-8') as f:
             for sentence in sentences:
@@ -208,7 +161,7 @@ class ChunkManager:
     
     def get_chunk_file(self, chunk_number: int) -> Path:
         """Get the file path for a chunk."""
-        return self.chunks_dir / f"translated_data_chunk_{chunk_number}.txt"
+        return self.chunks_dir / f"hiligaynon_chunk_{chunk_number}.txt"
     
     def get_status(self) -> str:
         """Get formatted status of all chunks."""

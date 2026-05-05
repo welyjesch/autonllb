@@ -76,8 +76,8 @@ class ChunkManager:
         return sorted(untranslated)
     
     def get_chunk_file(self, chunk_number: int) -> Path:
-        """Get the file path for a chunk."""
-        return self.chunks_dir / f"translated_data_chunk_{chunk_number}.txt"
+        """Get the file path for a chunk (contains ORIGINAL Hiligaynon sentences)."""
+        return self.chunks_dir / f"hiligaynon_chunk_{chunk_number}.txt"
     
     def get_status(self) -> str:
         """Get formatted status of all chunks."""
@@ -100,11 +100,22 @@ async def translate_sentence(
     for attempt in range(retries):
         try:
             await asyncio.sleep(delay)
-            result = await translator.translate(sentence, src='hil', dest='en')
+            # googletrans.Translator is synchronous, so wrap in executor to avoid blocking
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: translator.translate(sentence, src='hil', dest='en')
+            )
             
             if hasattr(result, 'text') and result.text:
-                return result.text
+                translated = result.text
+                # Verify translation is different from source (contamination check)
+                if translated.strip() == sentence.strip():
+                    raise ValueError("Translation returned unchanged sentence (possible fallback)")
+                return translated
             elif isinstance(result, str):
+                if result.strip() == sentence.strip():
+                    raise ValueError("Translation returned unchanged sentence (possible fallback)")
                 return result
             
             # If result is invalid, raise exception to trigger retry logic
@@ -183,12 +194,24 @@ async def phase_translate(
         
         # Translate sentences
         translated_sentences = []
+        failed_sentences = 0
         for idx, sentence in enumerate(sentences, 1):
-            english = await translate_sentence(translator, sentence, delay=translation_delay)
-            translated_sentences.append(english)
+            try:
+                english = await translate_sentence(translator, sentence, delay=translation_delay)
+                translated_sentences.append(english)
+            except RuntimeError as e:
+                print(f"    CRITICAL: Translation failed for sentence {idx}: {str(e)}")
+                failed_sentences += 1
+                # Do NOT write this chunk - contamination prevention
+                break
             
             if idx % 20 == 0:
                 print(f"    Progress: {idx}/{len(sentences)} translated")
+        
+        # Only save if all translations succeeded
+        if failed_sentences > 0:
+            print(f"  ✗ Chunk {chunk_id} translation aborted ({failed_sentences} failures) - file NOT created to prevent contamination")
+            continue
         
         # Save translated chunk
         with open(output_file, 'w', encoding='utf-8') as f:
@@ -257,11 +280,26 @@ def phase_assemble(
             # Read translated and original sentences
             original_file = chunk_manager.get_chunk_file(chunk_id)
             
+            if not original_file.exists():
+                print(f"  ✗ Original file not found: {original_file}")
+                continue
+            
             with open(original_file, 'r', encoding='utf-8') as f:
                 original_sentences = [line.strip() for line in f if line.strip()]
             
             with open(translated_file, 'r', encoding='utf-8') as f:
                 translated_sentences = [line.strip() for line in f if line.strip()]
+            
+            # Contamination check: verify translations are actually different from originals
+            identical_count = 0
+            for orig, trans in zip(original_sentences, translated_sentences):
+                if orig.strip() == trans.strip():
+                    identical_count += 1
+            
+            if identical_count > 0:
+                print(f"  ✗ CONTAMINATION DETECTED: {identical_count}/{len(original_sentences)} sentences identical (not translated)")
+                print(f"    This chunk is skipped to prevent poisoning the dataset")
+                continue
             
             # Create pairs
             for idx, (hiligaynon, english) in enumerate(zip(original_sentences, translated_sentences), 1):

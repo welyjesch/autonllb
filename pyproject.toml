@@ -8,7 +8,8 @@ dependencies = [
     "datasets>=2.20.0",
     "sentencepiece>=0.1.98",
     "accelerate>=0.2",
-    "googletrans==4.0.2"
+    "googletrans==4.0.2",
+    "langdetect>=1.0.9",
 ]
 
 [project.optional-dependencies]
