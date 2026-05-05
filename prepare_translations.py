@@ -107,13 +107,17 @@ async def translate_sentence(
             elif isinstance(result, str):
                 return result
             
-            return sentence
+            # If result is invalid, raise exception to trigger retry logic
+            raise ValueError("Translation returned an invalid or empty result")
         except Exception as e:
             print(f"  Translation error (attempt {attempt + 1}/{retries}): {str(e)}")
             if attempt < retries - 1:
                 await asyncio.sleep(delay * (attempt + 1))
     
-    return sentence
+    # CRITICAL: NEVER return the original sentence as a fallback. 
+    # Returning the source text when translation fails sabotages the entire dataset.
+    # If all retries fail, the function must raise an exception to stop the pipeline.
+    raise RuntimeError(f"Permanent translation failure for sentence: {sentence[:50]}...")
 
 
 # ==============================================================================
