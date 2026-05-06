@@ -22,9 +22,13 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 from langdetect import detect, detect_langs, DetectorFactory
+from datasets import load_dataset
 
 # Ensure consistent results from langdetect
 DetectorFactory.seed = 0
+
+# Abbreviation pattern for sentence splitting
+ABBREVIATION_PATTERN = r'\b[A-Z]{1,3}\.\b|etc\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.'
 
 def is_english_sentence(sentence: str) -> bool:
     """
@@ -87,6 +91,22 @@ def split_into_sentences(text: str) -> List[str]:
     sentences = [s for s in sentences if len(s) >= 10]
     
     return sentences
+
+
+# ==============================================================================
+# SECTION 1A: Dataset Loading
+# ==============================================================================
+
+def load_dataset_manually() -> List[str]:
+    """
+    Load articles from welyjesch/hiligaynon_news_articles dataset.
+    
+    Returns:
+        List of article texts
+    """
+    dataset = load_dataset("welyjesch/hiligaynon_news_articles")
+    articles = dataset["train"]["articles"]
+    return articles
 
 
 # ==============================================================================
