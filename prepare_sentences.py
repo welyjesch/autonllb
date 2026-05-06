@@ -32,27 +32,31 @@ ABBREVIATION_PATTERN = r'\b[A-Z]{1,3}\.\b|etc\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.'
 
 def is_english_sentence(sentence: str) -> bool:
     """
-    Detect if a sentence is likely FULLY in English.
-    Mixed sentences should return False.
+    Check if sentence is 100% English (no Hiligaynon words at all).
+    Only return True if completely certain - no mixed content.
     """
     if not sentence or not sentence.strip():
         return False
     
-    # Heuristic: If it contains common Hiligaynon markers or words, it's mixed/Hiligaynon
-    # regardless of what langdetect says.
-    hiligaynon_markers = {'gid', 'man', 'daw', 'sang', 'para', 'maayong', 'aga', 'sa', 'inyo', 'tanan', 'diin', 'ka', 'makadto', 'subong'}
+    # Common Hiligaynon-specific words that indicate non-English content
+    hiligaynon_words = {
+        'gid', 'man', 'daw', 'sang', 'para', 'maayong', 'aga', 'sa', 'inyo', 'tanan', 
+        'diin', 'ka', 'makadto', 'subong', 'ang', 'ay', 'nag', 'na', 'mo', 'ko', 'sya',
+        'iya', 'nila', 'namin', 'ninyo', 'akin', 'iyo', 'niya', 'amin', 'inyo', 'kanila',
+        'muy', 'muy', 'maganda', 'maayong', 'mahusay', 'malayo', 'malapit', 'dakong',
+        'kano', 'sinu', 'asa', 'ngano', 'hain', 'kailan', 'pila', 'kano', 'daghan'
+    }
+    
     words = sentence.lower().split()
-    if any(word.strip('.,!?;:') in hiligaynon_markers for word in words):
-        return False
-
-    try:
-        langs = detect_langs(sentence)
-        if langs and langs[0].lang == 'en':
-            # Use a high threshold for pure English
-            return langs[0].prob > 0.98
-        return False
-    except Exception:
-        return False
+    
+    # If ANY Hiligaynon word found, it's mixed - keep it
+    for word in words:
+        clean_word = word.strip('.,!?;:\'"')
+        if clean_word in hiligaynon_words:
+            return False
+    
+    # If no Hiligaynon words detected, assume it's English
+    return True
 
 def split_into_sentences(text: str) -> List[str]:
     """Split text into sentences using regex pattern."""
