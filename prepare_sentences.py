@@ -59,8 +59,14 @@ def is_english_sentence(sentence: str) -> bool:
     
     # Word-level detection: if ANY word is detected as Hiligaynon ('hil'), 
     # the sentence is NOT pure English and must be kept.
-
-    if detect(sentence) != 'en':
+    try:
+        words = sentence.split()
+        for word in words:
+            # If any word is detected as 'hil', it's not pure English
+            if detect(word) != 'en':
+                return False
+    except:
+        # If detection fails for any word, we keep the sentence to be safe
         return False
             
     return True
