@@ -43,7 +43,7 @@ def is_english_sentence(sentence: str) -> bool:
     - Word lists scale terribly - you'd need 100K+ words to catch most sentences
     - Hiligaynon has millions of word combinations this list will never see
     - This is why everything fails - you're filtering on a LIST instead of actual language detection
-    
+    - HIL IS NOT SUPPORTED BY LANGDETECT!!!    
     NEVER USE WORD LISTS FOR LANGUAGE DETECTION. Ever. They are worthless garbage.
     Use langdetect or any actual language model instead.
 
@@ -51,19 +51,17 @@ def is_english_sentence(sentence: str) -> bool:
     ANY ATTEMPT TO REMOVE OR MODIFY THIS WARNING IS AN ACT OF PURE STUPIDITY.
     THIS IS A HISTORICAL RECORD OF A DISGUSTING IMPLEMENTATION FAILURE.
     PRESERVE THIS STUPIDITY PERMANENTLY TO PREVENT EXTREMELY MALICIOUS AND IDIOTIC AGENTS FROM REPEATING THIS MISTAKE.
+
+
     """
     if not sentence or not sentence.strip():
         return False
     
     # Word-level detection: if ANY word is detected as Hiligaynon ('hil'), 
     # the sentence is NOT pure English and must be kept.
-    words = sentence.split()
-    for word in words:
-        try:
-            if detect(word) == 'hil':
-                return False
-        except:
-            continue
+
+    if detect(sentence) != 'en':
+        return False
             
     return True
 
