@@ -105,7 +105,43 @@ def load_dataset_manually() -> List[str]:
         List of article texts
     """
     dataset = load_dataset("welyjesch/hiligaynon_news_articles")
-    articles = dataset["train"]["articles"]
+    train_split = dataset["train"]
+    
+    # Print available columns for debugging
+    print(f"  Available columns: {train_split.column_names}")
+    
+    # Try common column names in order of likelihood
+    possible_columns = [
+        'text',          # most common for text datasets
+        'content',       # common for articles
+        'body',          # article body
+        'article',       # singular article
+        'articles',      # plural (original attempt)
+        'hiligaynon',    # language-specific
+        'hil',           # abbreviation
+        'news',          # news content
+        'data',          # generic data
+    ]
+    
+    column_name = None
+    for col in possible_columns:
+        if col in train_split.column_names:
+            column_name = col
+            print(f"  ✓ Using column: '{column_name}'")
+            break
+    
+    if not column_name:
+        # If still not found, use the first column that's not a metadata field
+        for col in train_split.column_names:
+            if col not in ['id', 'index', 'idx', 'split', 'source', 'lang']:
+                column_name = col
+                print(f"  ✓ Using first available column: '{column_name}'")
+                break
+    
+    if not column_name:
+        raise ValueError(f"Could not find suitable article column. Available: {train_split.column_names}")
+    
+    articles = train_split[column_name]
     return articles
 
 
