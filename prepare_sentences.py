@@ -28,7 +28,7 @@ from datasets import load_dataset
 DetectorFactory.seed = 0
 
 # Abbreviation pattern for sentence splitting
-ABBREVIATION_PATTERN = r'\b[A-Z]{1,3}\.\b|etc\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.'
+ABBREVIATION_PATTERN = r'\b[A-Z]\.\s(?=[A-Z])|\b[A-Z]{1,3}\.\b|etc\.|Mr\.|Mrs\.|Ms\.|Dr\.|Prof\.|no\.|vol\.|pg\.|p\.'
 
 def is_english_sentence(sentence: str) -> bool:
     """
@@ -96,6 +96,9 @@ def split_into_sentences(text: str) -> List[str]:
         if end_pos >= len(text):
             return abbrev
         
+        # Always replace the dot with the placeholder for any match of ABBREVIATION_PATTERN
+        # This ensures that the subsequent re.split(r'(?<=[.!?])\s+', protected_text)
+        # will NOT find a period followed by a space, because the period is now a placeholder.
         return abbrev.replace('.', PLACEHOLDER)
     
     protected_text = re.sub(ABBREVIATION_PATTERN, protect_abbreviation, text)
@@ -105,7 +108,8 @@ def split_into_sentences(text: str) -> List[str]:
     sentences = re.split(r'(?<=[.!?])\s+', protected_text)
     sentences = [s.replace(PLACEHOLDER, '.') for s in sentences]
     sentences = [s.strip() for s in sentences if s.strip()]
-    sentences = [s for s in sentences if len(s) >= 10]
+    # Removed the length filter (len(s) >= 10) to avoid cutting off short sentences/initials during testing
+    # sentences = [s for s in sentences if len(s) >= 10]
     
     return sentences
 
@@ -290,15 +294,17 @@ async def phase_chunk(
         
         # Filter out English sentences
         filtered_sentences = []
+        article_skipped = 0
         for sent in sentences:
             if is_english_sentence(sent):
                 first_three_words = ' '.join(sent.split()[:3])
                 print(f"    SKIPPED (100% English): {first_three_words}...")
                 skipped_english += 1
+                article_skipped += 1
             else:
                 filtered_sentences.append(sent)
         
-        print(f"  Kept {len(filtered_sentences)} (skipped {skipped_english - sum(1 for s in sentences if is_english_sentence(s))} English)")
+        print(f"  Kept {len(filtered_sentences)} (skipped {article_skipped} English)")
         
         total_sentences += len(filtered_sentences)
         
